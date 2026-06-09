@@ -11,6 +11,7 @@ public class LlamaProcessService
 {
     private Process? _process;
     private CancellationTokenSource? _cts;
+    private readonly LocalizationService _loc = LocalizationService.Instance;
 
     public bool IsRunning => _process != null && !_process.HasExited;
 
@@ -25,13 +26,13 @@ public class LlamaProcessService
         Action onExit)
     {
         if (IsRunning)
-            throw new InvalidOperationException("Un processus est déjà en cours d'exécution.");
+            throw new InvalidOperationException(_loc["svc.process_already_running"]);
 
         _cts = new CancellationTokenSource();
 
         var exePath = Path.Combine(llamaDir, "llama-server.exe");
         if (!File.Exists(exePath))
-            throw new FileNotFoundException($"llama-server.exe introuvable dans {llamaDir}");
+            throw new FileNotFoundException(_loc.Format("svc.server_not_found", llamaDir));
 
         var args = BuildArguments(modelPath, host, port, parameters);
 
@@ -72,10 +73,10 @@ public class LlamaProcessService
         _process.BeginOutputReadLine();
         _process.BeginErrorReadLine();
 
-        onOutput($"[INFO] Serveur démarré - PID: {_process.Id}");
-        onOutput($"[INFO] Répertoire: {llamaDir}");
-        onOutput($"[INFO] Modèle: {modelPath}");
-        onOutput($"[INFO] Commande: llama-server {args}");
+        onOutput(_loc.Format("svc.log.server_started", _process.Id));
+        onOutput(_loc.Format("svc.log.directory", llamaDir));
+        onOutput(_loc.Format("svc.log.model", modelPath));
+        onOutput(_loc.Format("svc.log.command", args));
         onOutput("");
 
         try
@@ -101,7 +102,7 @@ public class LlamaProcessService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Erreur lors de l'arrêt du processus : {ex.Message}");
+            Console.WriteLine($"Error stopping process: {ex.Message}");
         }
     }
 

@@ -9,6 +9,8 @@ namespace LLamaCppLauncher.Services;
 
 public class ModelDiscoveryService
 {
+    private readonly GgufMetadataService _ggufMetadataService = new();
+
     public List<string> GetLlamaVersions(string rootDir)
     {
         try
@@ -44,6 +46,19 @@ public class ModelDiscoveryService
             {
                 var fileName = Path.GetFileNameWithoutExtension(filePath);
                 var modelInfo = ParseModelFileName(fileName, filePath);
+
+                try
+                {
+                    var fileInfo = new FileInfo(filePath);
+                    modelInfo.FileSize = fileInfo.Length;
+                }
+                catch { }
+
+                var metadata = _ggufMetadataService.ReadMetadata(filePath);
+                modelInfo.Architecture = metadata.architecture;
+                modelInfo.ParameterCount = metadata.parameterCount;
+                modelInfo.ContextLength = metadata.contextLength;
+
                 models.Add(modelInfo);
             }
 

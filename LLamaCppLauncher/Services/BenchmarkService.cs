@@ -14,6 +14,7 @@ namespace LLamaCppLauncher.Services;
 public class BenchmarkService
 {
     private readonly string _benchmarkFilePath;
+    private readonly LocalizationService _loc = LocalizationService.Instance;
 
     public BenchmarkService()
     {
@@ -31,14 +32,14 @@ public class BenchmarkService
         var benchExe = Path.Combine(llamaDir, "llama-bench.exe");
         if (!File.Exists(benchExe))
         {
-            onLog($"[ERREUR] llama-bench.exe introuvable dans {llamaDir}");
+            onLog(_loc.Format("svc.bench.not_found_log", llamaDir));
             return new BenchmarkResult
             {
                 ModelName = modelName,
                 ModelQuantization = modelQuant,
                 LlamaVersion = Path.GetFileName(llamaDir),
                 HasError = true,
-                ErrorMessage = "llama-bench.exe introuvable"
+                ErrorMessage = _loc["svc.bench.not_found"]
             };
         }
 
@@ -47,7 +48,7 @@ public class BenchmarkService
                    $"-p {BenchmarkConfig.PromptTokens} -n {BenchmarkConfig.GenerationTokens} " +
                    $"-r {BenchmarkConfig.Repetitions}";
 
-        onLog($"[BENCHMARK] Commande: llama-bench {args}");
+        onLog(_loc.Format("svc.bench.command_log", args));
 
         var outputBuilder = new StringBuilder();
         var errorBuilder = new StringBuilder();
@@ -104,7 +105,7 @@ public class BenchmarkService
                     ModelQuantization = modelQuant,
                     LlamaVersion = Path.GetFileName(llamaDir),
                     HasError = true,
-                    ErrorMessage = "Impossible de parser la sortie de llama-bench"
+                    ErrorMessage = _loc["svc.bench.parse_error"]
                 };
             }
 
@@ -116,7 +117,7 @@ public class BenchmarkService
         }
         catch (Exception ex)
         {
-            onLog($"[ERREUR] {ex.Message}");
+            onLog(_loc.Format("vm.log.error_prefix", ex.Message));
             return new BenchmarkResult
             {
                 ModelName = modelName,
@@ -225,7 +226,7 @@ public class BenchmarkService
 
         foreach (var line in lines)
         {
-            if (line.TrimStart().StartsWith("| Modèle"))
+            if (line.TrimStart().StartsWith("| Modèle") || line.TrimStart().StartsWith("| Model"))
             {
                 inTable = true;
                 continue;
@@ -243,6 +244,8 @@ public class BenchmarkService
 
                 if (cells.Count >= 8)
                 {
+                    var errorMarkerEn = "ERROR";
+                    var errorMarkerFr = "ERREUR";
                     var result = new BenchmarkResult
                     {
                         ModelName = cells[0],
@@ -253,9 +256,9 @@ public class BenchmarkService
                         ModelParams = cells[5],
                         PromptProcessingRaw = cells[6],
                         GenerationRaw = cells[7],
-                        PromptProcessingTs = cells[6] == "ERREUR" ? 0 : ExtractTsValue(cells[6]),
-                        GenerationTs = cells[7] == "ERREUR" ? 0 : ExtractTsValue(cells[7]),
-                        HasError = cells[6] == "ERREUR" || cells[7] == "ERREUR"
+                        PromptProcessingTs = (cells[6] == errorMarkerEn || cells[6] == errorMarkerFr) ? 0 : ExtractTsValue(cells[6]),
+                        GenerationTs = (cells[7] == errorMarkerEn || cells[7] == errorMarkerFr) ? 0 : ExtractTsValue(cells[7]),
+                        HasError = cells[6] == errorMarkerEn || cells[6] == errorMarkerFr || cells[7] == errorMarkerEn || cells[7] == errorMarkerFr
                     };
                     results.Add(result);
                 }
@@ -281,28 +284,30 @@ public class BenchmarkService
 
         sb.AppendLine("# Benchmark Results");
         sb.AppendLine();
-        sb.AppendLine($"**Date de dernière mise à jour :** {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine(_loc.Format("svc.bench.md_date", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")));
         sb.AppendLine();
-        sb.AppendLine("**Paramètres fixes :**");
+        sb.AppendLine(_loc["svc.bench.md_fixed_params"]);
         sb.AppendLine($"- NGL: {BenchmarkConfig.Ngl}");
         sb.AppendLine($"- Cache Type K/V: {BenchmarkConfig.CacheTypeK}");
         sb.AppendLine($"- Prompt tokens: {BenchmarkConfig.PromptTokens}");
         sb.AppendLine($"- Generation tokens: {BenchmarkConfig.GenerationTokens}");
         sb.AppendLine($"- Repetitions: {BenchmarkConfig.Repetitions}");
         sb.AppendLine();
-        sb.AppendLine("## Résultats");
+        sb.AppendLine(_loc["svc.bench.md_results"]);
         sb.AppendLine();
-        sb.AppendLine("| Modèle | Quant | Version | Backend | Size | Params | PP (t/s) | TG (t/s) |");
-        sb.AppendLine("|--------|-------|---------|---------|------|--------|----------|----------|");
+        sb.AppendLine("| Model | Quant | Version | Backend | Size | Params | PP (t/s) | TG (t/s) |");
+        sb.AppendLine("|-------|-------|---------|---------|------|--------|----------|----------|");
 
         var sorted = results
             .OrderByDescending(r => r.HasError ? 0 : r.PromptProcessingTs)
             .ToList();
 
+        var errorMarker = _loc["svc.bench.md_error"];
+
         foreach (var r in sorted)
         {
-            var pp = r.HasError ? "ERREUR" : r.PromptProcessingRaw;
-            var tg = r.HasError ? "ERREUR" : r.GenerationRaw;
+            var pp = r.HasError ? errorMarker : r.PromptProcessingRaw;
+            var tg = r.HasError ? errorMarker : r.GenerationRaw;
             sb.AppendLine($"| {r.ModelName} | {r.ModelQuantization} | {r.LlamaVersion} | {r.Backend} | {r.ModelSize} | {r.ModelParams} | {pp} | {tg} |");
         }
 
@@ -310,7 +315,7 @@ public class BenchmarkService
         if (errors.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine("## Détails des erreurs");
+            sb.AppendLine(_loc["svc.bench.md_error_details"]);
             sb.AppendLine();
             foreach (var e in errors)
             {

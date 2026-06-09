@@ -8,6 +8,7 @@ namespace LLamaCppLauncher.Services;
 public class ConfigService
 {
     private readonly string _configPath;
+    private readonly LocalizationService _loc = LocalizationService.Instance;
 
     public ConfigService()
     {
@@ -43,7 +44,7 @@ public class ConfigService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Erreur lors de la sauvegarde de la config : {ex.Message}");
+            Console.WriteLine(_loc.Format("svc.config_save_error", ex.Message));
         }
     }
 }

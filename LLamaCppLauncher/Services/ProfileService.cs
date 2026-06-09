@@ -10,6 +10,7 @@ namespace LLamaCppLauncher.Services;
 public class ProfileService
 {
     private readonly string _profilesDir;
+    private readonly LocalizationService _loc = LocalizationService.Instance;
 
     public ProfileService()
     {
@@ -32,7 +33,7 @@ public class ProfileService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Erreur lors de la sauvegarde du profil : {ex.Message}");
+            Console.WriteLine(_loc.Format("svc.profile_save_error", ex.Message));
         }
     }
 
@@ -81,7 +82,7 @@ public class ProfileService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Erreur lors de la suppression du profil : {ex.Message}");
+            Console.WriteLine(_loc.Format("svc.profile_delete_error", ex.Message));
         }
     }
 

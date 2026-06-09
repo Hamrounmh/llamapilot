@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -8,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LLamaCppLauncher.Models;
 using LLamaCppLauncher.Services;
+using LLamaCppLauncher.Windows;
 using Microsoft.Win32;
 using WpfApplication = System.Windows.Application;
 using WpfMessageBox = System.Windows.MessageBox;
@@ -26,6 +28,7 @@ public partial class MainViewModel : ObservableObject
     private readonly CommandParserService _commandParserService;
     private readonly LlamaProcessService _llamaProcessService;
     private readonly BenchmarkService _benchmarkService;
+    private readonly LocalizationService _loc = LocalizationService.Instance;
 
     [ObservableProperty]
     private string _llamaCppDirectory = string.Empty;
@@ -90,6 +93,20 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _selectedBenchmarkColor = "#4EC9B0";
 
+    [ObservableProperty]
+    private string _statusText = string.Empty;
+
+    [ObservableProperty]
+    private string _statusBarVersion = string.Empty;
+
+    [ObservableProperty]
+    private string _statusBarModel = string.Empty;
+
+    [ObservableProperty]
+    private string _logCountDisplay = string.Empty;
+
+    public string LanguageLabel => _loc.LanguageLabel;
+
     public MainViewModel()
     {
         _configService = new ConfigService();
@@ -102,6 +119,47 @@ public partial class MainViewModel : ObservableObject
         InitializeParameters();
         LoadConfiguration();
         RefreshProfiles();
+        UpdateStatusText();
+        UpdateStatusBarVersion();
+        UpdateStatusBarModel();
+        UpdateLogCountDisplay();
+
+        Logs.CollectionChanged += (_, _) => UpdateLogCountDisplay();
+        _loc.LanguageChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged()
+    {
+        OnPropertyChanged(nameof(LanguageLabel));
+        UpdateStatusText();
+        UpdateStatusBarVersion();
+        UpdateStatusBarModel();
+        UpdateLogCountDisplay();
+        UpdateSelectedBenchmarkResult();
+    }
+
+    private void UpdateStatusText()
+    {
+        StatusText = IsRunning ? _loc["status.running"] : _loc["status.stopped"];
+    }
+
+    private void UpdateStatusBarVersion()
+    {
+        StatusBarVersion = SelectedVersion != null
+            ? _loc.Format("status.version_format", SelectedVersion)
+            : _loc["status.version_none"];
+    }
+
+    private void UpdateStatusBarModel()
+    {
+        StatusBarModel = SelectedModel != null
+            ? _loc.Format("status.model_format", SelectedModel.DisplayName)
+            : _loc["status.model_none"];
+    }
+
+    private void UpdateLogCountDisplay()
+    {
+        LogCountDisplay = $"({Logs.Count} lines)";
     }
 
     private void InitializeParameters()
@@ -156,7 +214,8 @@ public partial class MainViewModel : ObservableObject
             LlamaCppDirectory = LlamaCppDirectory,
             ModelsDirectory = ModelsDirectory,
             LastSelectedVersion = SelectedVersion ?? string.Empty,
-            LastSelectedModel = SelectedModel?.FullPath ?? string.Empty
+            LastSelectedModel = SelectedModel?.FullPath ?? string.Empty,
+            Language = _loc.CurrentLanguage
         };
         _configService.Save(config);
     }
@@ -184,7 +243,7 @@ public partial class MainViewModel : ObservableObject
     {
         var dialog = new System.Windows.Forms.FolderBrowserDialog
         {
-            Description = "Sélectionner le répertoire llama.cpp"
+            Description = _loc["vm.select_llama_dir"]
         };
 
         if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
@@ -200,7 +259,7 @@ public partial class MainViewModel : ObservableObject
     {
         var dialog = new System.Windows.Forms.FolderBrowserDialog
         {
-            Description = "Sélectionner le répertoire des modèles"
+            Description = _loc["vm.select_models_dir"]
         };
 
         if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
@@ -217,7 +276,7 @@ public partial class MainViewModel : ObservableObject
         if (!string.IsNullOrEmpty(LlamaCppDirectory))
         {
             RefreshVersions();
-            AddLog("[INFO] Versions actualisées");
+            AddLog(_loc["vm.log.versions_refreshed"]);
         }
     }
 
@@ -227,8 +286,21 @@ public partial class MainViewModel : ObservableObject
         if (!string.IsNullOrEmpty(ModelsDirectory))
         {
             RefreshModels();
-            AddLog("[INFO] Modèles actualisés");
+            AddLog(_loc["vm.log.models_refreshed"]);
         }
+    }
+
+    [RelayCommand]
+    private void ManageModels()
+    {
+        var dialog = new ManageModelsWindow(
+            _modelDiscoveryService,
+            _benchmarkService,
+            SelectedVersion ?? string.Empty,
+            ModelsDirectory);
+        dialog.Owner = WpfApplication.Current.MainWindow;
+        dialog.ShowDialog();
+        RefreshModels();
     }
 
     [RelayCommand]
@@ -236,9 +308,9 @@ public partial class MainViewModel : ObservableObject
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Filter = "Fichiers JSON|*.json",
+            Filter = _loc["vm.json_filter"],
             DefaultExt = ".json",
-            Title = "Sauvegarder le profil"
+            Title = _loc["vm.save_profile_title"]
         };
 
         if (dialog.ShowDialog() == true)
@@ -253,7 +325,7 @@ public partial class MainViewModel : ObservableObject
 
             _profileService.SaveProfile(profile.Name, profile);
             RefreshProfiles();
-            AddLog($"[INFO] Profil '{profile.Name}' sauvegardé");
+            AddLog(_loc.Format("vm.log.profile_saved", profile.Name));
         }
     }
 
@@ -262,14 +334,14 @@ public partial class MainViewModel : ObservableObject
     {
         if (SelectedProfile == null)
         {
-            WpfMessageBox.Show("Veuillez sélectionner un profil", "Erreur", WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
+            WpfMessageBox.Show(_loc["vm.select_profile_msg"], _loc["vm.error"], WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
             return;
         }
 
         var profile = _profileService.LoadProfile(SelectedProfile);
         if (profile == null)
         {
-            WpfMessageBox.Show("Profil introuvable", "Erreur", WpfMessageBoxButton.OK, WpfMessageBoxImage.Error);
+            WpfMessageBox.Show(_loc["vm.profile_not_found"], _loc["vm.error"], WpfMessageBoxButton.OK, WpfMessageBoxImage.Error);
             return;
         }
 
@@ -281,7 +353,7 @@ public partial class MainViewModel : ObservableObject
                 param.Value = string.Empty;
         }
 
-        AddLog($"[INFO] Profil '{SelectedProfile}' chargé");
+        AddLog(_loc.Format("vm.log.profile_loaded", SelectedProfile));
     }
 
     [RelayCommand]
@@ -300,8 +372,26 @@ public partial class MainViewModel : ObservableObject
                     param.Value = string.Empty;
             }
 
-            AddLog("[INFO] Commande importée");
+            AddLog(_loc["vm.log.command_imported"]);
         }
+    }
+
+    [RelayCommand]
+    private void OpenServer()
+    {
+        var url = $"http://{Host}:{Port}";
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = url,
+            UseShellExecute = true
+        });
+    }
+
+    [RelayCommand]
+    private void SwitchLanguage()
+    {
+        _loc.ToggleLanguage();
+        SaveConfiguration();
     }
 
     [RelayCommand(CanExecute = nameof(CanStart))]
@@ -309,11 +399,12 @@ public partial class MainViewModel : ObservableObject
     {
         if (SelectedVersion == null || SelectedModel == null)
         {
-            WpfMessageBox.Show("Veuillez sélectionner une version et un modèle", "Erreur", WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
+            WpfMessageBox.Show(_loc["vm.select_version_model_msg"], _loc["vm.error"], WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
             return;
         }
 
         IsRunning = true;
+        UpdateStatusText();
         StartCommand.NotifyCanExecuteChanged();
         StopCommand.NotifyCanExecuteChanged();
         RestartCommand.NotifyCanExecuteChanged();
@@ -331,21 +422,23 @@ public partial class MainViewModel : ObservableObject
                 Port,
                 parameters,
                 line => WpfApplication.Current.Dispatcher.Invoke(() => AddLog(line)),
-                line => WpfApplication.Current.Dispatcher.Invoke(() => AddLog($"[ERREUR] {line}")),
+                line => WpfApplication.Current.Dispatcher.Invoke(() => AddLog(_loc.Format("vm.log.error_prefix", line))),
                 () => WpfApplication.Current.Dispatcher.Invoke(() =>
                 {
                     IsRunning = false;
+                    UpdateStatusText();
                     StartCommand.NotifyCanExecuteChanged();
                     StopCommand.NotifyCanExecuteChanged();
                     RestartCommand.NotifyCanExecuteChanged();
-                    AddLog("[INFO] Serveur arrêté");
+                    AddLog(_loc["vm.log.server_stopped"]);
                 })
             );
         }
         catch (Exception ex)
         {
-            AddLog($"[ERREUR] {ex.Message}");
+            AddLog(_loc.Format("vm.log.error_prefix", ex.Message));
             IsRunning = false;
+            UpdateStatusText();
             StartCommand.NotifyCanExecuteChanged();
             StopCommand.NotifyCanExecuteChanged();
             RestartCommand.NotifyCanExecuteChanged();
@@ -358,7 +451,7 @@ public partial class MainViewModel : ObservableObject
     private void Stop()
     {
         _llamaProcessService.Stop();
-        AddLog("[INFO] Arrêt du serveur demandé");
+        AddLog(_loc["vm.log.stop_requested"]);
     }
 
     private bool CanStop() => IsRunning;
@@ -376,7 +469,7 @@ public partial class MainViewModel : ObservableObject
     {
         var text = string.Join(Environment.NewLine, Logs);
         WpfClipboard.SetText(text);
-        AddLog("[INFO] Logs copiés dans le presse-papiers");
+        AddLog(_loc["vm.log.logs_copied"]);
     }
 
     [RelayCommand]
@@ -398,12 +491,19 @@ public partial class MainViewModel : ObservableObject
     {
         SaveConfiguration();
         UpdateSelectedBenchmarkResult();
+        UpdateStatusBarVersion();
     }
 
     partial void OnSelectedModelChanged(ModelInfo? value)
     {
         SaveConfiguration();
         UpdateSelectedBenchmarkResult();
+        UpdateStatusBarModel();
+    }
+
+    partial void OnIsRunningChanged(bool value)
+    {
+        UpdateStatusText();
     }
 
     private void UpdateSelectedBenchmarkResult()
@@ -441,7 +541,7 @@ public partial class MainViewModel : ObservableObject
         else
         {
             SelectedBenchmarkResult = null;
-            SelectedBenchmarkDisplay = "Aucun benchmark disponible";
+            SelectedBenchmarkDisplay = _loc["benchmark.no_benchmark"];
             SelectedBenchmarkColor = "#808080";
         }
     }
@@ -464,7 +564,7 @@ public partial class MainViewModel : ObservableObject
     {
         if (string.IsNullOrEmpty(LlamaCppDirectory) || string.IsNullOrEmpty(ModelsDirectory))
         {
-            WpfMessageBox.Show("Veuillez configurer les répertoires llama.cpp et modèles", "Erreur", WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
+            WpfMessageBox.Show(_loc["vm.configure_dirs_msg"], _loc["vm.error"], WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
             return;
         }
 
@@ -473,7 +573,7 @@ public partial class MainViewModel : ObservableObject
 
         if (versions.Count == 0 || models.Count == 0)
         {
-            WpfMessageBox.Show("Aucune version llama.cpp ou modèle trouvé", "Erreur", WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
+            WpfMessageBox.Show(_loc["vm.no_version_model_found"], _loc["vm.error"], WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
             return;
         }
 
@@ -493,7 +593,7 @@ public partial class MainViewModel : ObservableObject
 
         if (benchmarksToRun.Count == 0)
         {
-            AddLog("[INFO] Tous les benchmarks existent déjà");
+            AddLog(_loc["vm.benchmark.all_exist"]);
             return;
         }
 
@@ -503,7 +603,7 @@ public partial class MainViewModel : ObservableObject
         BenchmarkAllCommand.NotifyCanExecuteChanged();
         BenchmarkMissingCommand.NotifyCanExecuteChanged();
 
-        AddLog($"[BENCHMARK] Démarrage de {BenchmarkTotal} benchmark(s)");
+        AddLog(_loc.Format("vm.benchmark.starting", BenchmarkTotal));
 
         var results = new List<BenchmarkResult>(existingResults);
 
@@ -511,12 +611,12 @@ public partial class MainViewModel : ObservableObject
         {
             var versionName = System.IO.Path.GetFileName(version);
             BenchmarkProgress++;
-            BenchmarkStatus = $"Benchmark {BenchmarkProgress}/{BenchmarkTotal} : {versionName} - {model.DisplayName}";
+            BenchmarkStatus = _loc.Format("vm.benchmark.status", BenchmarkProgress, BenchmarkTotal, versionName, model.DisplayName);
 
             AddLog("");
-            AddLog($"[BENCHMARK] ========== {BenchmarkProgress}/{BenchmarkTotal} ==========");
-            AddLog($"[BENCHMARK] Version : {versionName}");
-            AddLog($"[BENCHMARK] Modèle : {model.DisplayName}");
+            AddLog(_loc.Format("vm.benchmark.separator", BenchmarkProgress, BenchmarkTotal));
+            AddLog(_loc.Format("vm.benchmark.version", versionName));
+            AddLog(_loc.Format("vm.benchmark.model", model.DisplayName));
 
             var result = await _benchmarkService.RunBenchmarkAsync(
                 version,
@@ -536,7 +636,7 @@ public partial class MainViewModel : ObservableObject
 
                 if (result.HasError)
                 {
-                    AddLog($"[BENCHMARK] ✗ ERREUR : {result.ErrorMessage}");
+                    AddLog(_loc.Format("vm.benchmark.error", result.ErrorMessage));
                 }
                 else
                 {
@@ -552,7 +652,7 @@ public partial class MainViewModel : ObservableObject
         _benchmarkService.SaveResults(sortedResults);
 
         AddLog("");
-        AddLog("[BENCHMARK] ========== RÉSULTATS ==========");
+        AddLog(_loc["vm.benchmark.results"]);
         var markdown = _benchmarkService.GenerateMarkdownTable(sortedResults);
         foreach (var line in markdown.Split('\n'))
         {
@@ -560,8 +660,8 @@ public partial class MainViewModel : ObservableObject
         }
 
         AddLog("");
-        AddLog($"[BENCHMARK] Terminé - {BenchmarkProgress}/{BenchmarkTotal} benchmarks effectués");
-        AddLog($"[BENCHMARK] Résultats sauvegardés dans benchmark.md");
+        AddLog(_loc.Format("vm.benchmark.done", BenchmarkProgress, BenchmarkTotal));
+        AddLog(_loc["vm.benchmark.saved"]);
 
         IsBenchmarking = false;
         BenchmarkStatus = string.Empty;
@@ -576,7 +676,9 @@ public class ImportCommandDialog : WpfWindow
 
     public ImportCommandDialog()
     {
-        Title = "Importer une commande";
+        var loc = LocalizationService.Instance;
+
+        Title = loc["vm.import_command_title"];
         Width = 600;
         Height = 400;
         WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
@@ -617,7 +719,7 @@ public class ImportCommandDialog : WpfWindow
 
         var cancelButton = new System.Windows.Controls.Button
         {
-            Content = "Annuler",
+            Content = loc["vm.cancel"],
             Width = 80,
             Height = 30
         };

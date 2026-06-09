@@ -15,4 +15,7 @@ public class AppConfig
 
     [JsonPropertyName("lastSelectedModel")]
     public string LastSelectedModel { get; set; } = string.Empty;
+
+    [JsonPropertyName("language")]
+    public string Language { get; set; } = "en";
 }
