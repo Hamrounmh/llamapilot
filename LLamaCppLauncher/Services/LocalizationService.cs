@@ -123,6 +123,7 @@ public class LocalizationService : INotifyPropertyChanged
         ["vm.select_profile_msg"] = new() { ["en"] = "Please select a profile", ["fr"] = "Veuillez sélectionner un profil" },
         ["vm.profile_not_found"] = new() { ["en"] = "Profile not found", ["fr"] = "Profil introuvable" },
         ["vm.select_version_model_msg"] = new() { ["en"] = "Please select a version and a model", ["fr"] = "Veuillez sélectionner une version et un modèle" },
+        ["vm.select_model_msg"] = new() { ["en"] = "Please select a model", ["fr"] = "Veuillez sélectionner un modèle" },
         ["vm.configure_dirs_msg"] = new() { ["en"] = "Please configure llama.cpp and models directories", ["fr"] = "Veuillez configurer les répertoires llama.cpp et modèles" },
         ["vm.no_version_model_found"] = new() { ["en"] = "No llama.cpp version or model found", ["fr"] = "Aucune version llama.cpp ou modèle trouvé" },
         ["vm.import_command_title"] = new() { ["en"] = "Import a command", ["fr"] = "Importer une commande" },

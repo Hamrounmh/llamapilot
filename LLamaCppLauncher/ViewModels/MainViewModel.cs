@@ -239,6 +239,8 @@ public partial class MainViewModel : ObservableObject
         };
 
         _profileService.SaveProfile("default", defaultProfile);
+        RefreshProfiles();
+        SelectedProfile = "default";
 
         foreach (var param in Parameters)
         {
@@ -602,9 +604,16 @@ public partial class MainViewModel : ObservableObject
         await RunBenchmarks(true);
     }
 
-    private async Task RunBenchmarks(bool onlyMissing)
+    [RelayCommand(CanExecute = nameof(CanBenchmark))]
+    private async Task BenchmarkSelectedModel()
     {
-        if (string.IsNullOrEmpty(LlamaCppDirectory) || string.IsNullOrEmpty(ModelsDirectory))
+        if (SelectedModel == null)
+        {
+            WpfMessageBox.Show(_loc["vm.select_model_msg"], _loc["vm.error"], WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
+            return;
+        }
+
+        if (string.IsNullOrEmpty(LlamaCppDirectory))
         {
             WpfMessageBox.Show(_loc["vm.configure_dirs_msg"], _loc["vm.error"], WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
             return;
@@ -613,9 +622,8 @@ public partial class MainViewModel : ObservableObject
         UpdateBenchmarkConfig();
 
         var versions = _modelDiscoveryService.GetLlamaVersions(LlamaCppDirectory);
-        var models = _modelDiscoveryService.GetModels(ModelsDirectory);
 
-        if (versions.Count == 0 || models.Count == 0)
+        if (versions.Count == 0)
         {
             WpfMessageBox.Show(_loc["vm.no_version_model_found"], _loc["vm.error"], WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
             return;
@@ -626,13 +634,9 @@ public partial class MainViewModel : ObservableObject
 
         foreach (var version in versions)
         {
-            foreach (var model in models)
-            {
-                var versionName = System.IO.Path.GetFileName(version);
-                if (onlyMissing && _benchmarkService.BenchmarkExists(existingResults, versionName, model.Name, model.Quantization))
-                    continue;
-                benchmarksToRun.Add((version, model));
-            }
+            var versionName = System.IO.Path.GetFileName(version);
+            if (!_benchmarkService.BenchmarkExists(existingResults, versionName, SelectedModel.Name, SelectedModel.Quantization))
+                benchmarksToRun.Add((version, SelectedModel));
         }
 
         if (benchmarksToRun.Count == 0)
@@ -646,6 +650,7 @@ public partial class MainViewModel : ObservableObject
         BenchmarkProgress = 0;
         BenchmarkAllCommand.NotifyCanExecuteChanged();
         BenchmarkMissingCommand.NotifyCanExecuteChanged();
+        BenchmarkSelectedModelCommand.NotifyCanExecuteChanged();
 
         AddLog(_loc.Format("vm.benchmark.starting", BenchmarkTotal));
 
@@ -711,6 +716,120 @@ public partial class MainViewModel : ObservableObject
         BenchmarkStatus = string.Empty;
         BenchmarkAllCommand.NotifyCanExecuteChanged();
         BenchmarkMissingCommand.NotifyCanExecuteChanged();
+        BenchmarkSelectedModelCommand.NotifyCanExecuteChanged();
+    }
+
+    private async Task RunBenchmarks(bool onlyMissing)
+    {
+        if (string.IsNullOrEmpty(LlamaCppDirectory) || string.IsNullOrEmpty(ModelsDirectory))
+        {
+            WpfMessageBox.Show(_loc["vm.configure_dirs_msg"], _loc["vm.error"], WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
+            return;
+        }
+
+        UpdateBenchmarkConfig();
+
+        var versions = _modelDiscoveryService.GetLlamaVersions(LlamaCppDirectory);
+        var models = _modelDiscoveryService.GetModels(ModelsDirectory);
+
+        if (versions.Count == 0 || models.Count == 0)
+        {
+            WpfMessageBox.Show(_loc["vm.no_version_model_found"], _loc["vm.error"], WpfMessageBoxButton.OK, WpfMessageBoxImage.Warning);
+            return;
+        }
+
+        var existingResults = _benchmarkService.LoadExistingResults();
+        var benchmarksToRun = new List<(string version, ModelInfo model)>();
+
+        foreach (var version in versions)
+        {
+            foreach (var model in models)
+            {
+                var versionName = System.IO.Path.GetFileName(version);
+                if (onlyMissing && _benchmarkService.BenchmarkExists(existingResults, versionName, model.Name, model.Quantization))
+                    continue;
+                benchmarksToRun.Add((version, model));
+            }
+        }
+
+        if (benchmarksToRun.Count == 0)
+        {
+            AddLog(_loc["vm.benchmark.all_exist"]);
+            return;
+        }
+
+        IsBenchmarking = true;
+        BenchmarkTotal = benchmarksToRun.Count;
+        BenchmarkProgress = 0;
+        BenchmarkAllCommand.NotifyCanExecuteChanged();
+        BenchmarkMissingCommand.NotifyCanExecuteChanged();
+        BenchmarkSelectedModelCommand.NotifyCanExecuteChanged();
+
+        AddLog(_loc.Format("vm.benchmark.starting", BenchmarkTotal));
+
+        var results = new List<BenchmarkResult>(existingResults);
+
+        foreach (var (version, model) in benchmarksToRun)
+        {
+            var versionName = System.IO.Path.GetFileName(version);
+            BenchmarkProgress++;
+            BenchmarkStatus = _loc.Format("vm.benchmark.status", BenchmarkProgress, BenchmarkTotal, versionName, model.DisplayName);
+
+            AddLog("");
+            AddLog(_loc.Format("vm.benchmark.separator", BenchmarkProgress, BenchmarkTotal));
+            AddLog(_loc.Format("vm.benchmark.version", versionName));
+            AddLog(_loc.Format("vm.benchmark.model", model.DisplayName));
+
+            var result = await _benchmarkService.RunBenchmarkAsync(
+                version,
+                model.FullPath,
+                model.Name,
+                model.Quantization,
+                line => WpfApplication.Current.Dispatcher.Invoke(() => AddLog(line)));
+
+            if (result != null)
+            {
+                results.RemoveAll(r =>
+                    r.LlamaVersion.Equals(versionName, StringComparison.OrdinalIgnoreCase) &&
+                    r.ModelName.Equals(model.Name, StringComparison.OrdinalIgnoreCase) &&
+                    r.ModelQuantization.Equals(model.Quantization, StringComparison.OrdinalIgnoreCase));
+
+                results.Add(result);
+
+                if (result.HasError)
+                {
+                    AddLog(_loc.Format("vm.benchmark.error", result.ErrorMessage));
+                }
+                else
+                {
+                    AddLog($"[BENCHMARK] ✓ PP: {result.PromptProcessingRaw} t/s | TG: {result.GenerationRaw} t/s");
+                }
+            }
+        }
+
+        var sortedResults = results
+            .OrderByDescending(r => r.HasError ? 0 : r.PromptProcessingTs)
+            .ToList();
+
+        _benchmarkService.SaveResults(sortedResults);
+
+        AddLog("");
+        AddLog(_loc["vm.benchmark.results"]);
+        var markdown = _benchmarkService.GenerateMarkdownTable(sortedResults);
+        foreach (var line in markdown.Split('\n'))
+        {
+            AddLog(line);
+        }
+
+        AddLog("");
+        AddLog(_loc.Format("vm.benchmark.done", BenchmarkProgress, BenchmarkTotal));
+        AddLog(_loc["vm.benchmark.saved"]);
+
+        IsBenchmarking = false;
+        BenchmarkStatus = string.Empty;
+        BenchmarkAllCommand.NotifyCanExecuteChanged();
+        BenchmarkMissingCommand.NotifyCanExecuteChanged();
+        BenchmarkSelectedModelCommand.NotifyCanExecuteChanged();
     }
 
     private void UpdateBenchmarkConfig()

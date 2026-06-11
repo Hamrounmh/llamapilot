@@ -507,6 +507,12 @@
                                 Margin="0,0,0,4"
                                 HorizontalAlignment="Stretch"/>
 
+                        <Button Content="Benchmark Selected Model" 
+                                Command="{Binding BenchmarkSelectedModelCommand}"
+                                Style="{StaticResource SmallButton}" 
+                                Margin="0,0,0,4"
+                                HorizontalAlignment="Stretch"/>
+
                         <StackPanel Visibility="{Binding IsBenchmarking, Converter={StaticResource BoolToVisibilityConverter}}">
                             <TextBlock Text="{Binding BenchmarkStatus}" 
                                        Foreground="#D4D4D4" 
