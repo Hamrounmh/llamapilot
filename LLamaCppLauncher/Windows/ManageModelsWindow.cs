@@ -183,9 +183,9 @@ public class ManageModelsWindow : Window
         });
         grid.Columns.Add(new DataGridTextColumn
         {
-            Header = _loc["manage.col_params"],
-            Binding = new System.Windows.Data.Binding("ParameterCountDisplay"),
-            Width = new DataGridLength(90)
+            Header = _loc["manage.col_version"],
+            Binding = new System.Windows.Data.Binding("LlamaVersionDisplay"),
+            Width = new DataGridLength(120)
         });
         grid.Columns.Add(new DataGridTextColumn
         {
@@ -397,6 +397,7 @@ public class ManageModelsWindow : Window
             {
                 item.BenchmarkPP = result.PromptProcessingTs;
                 item.BenchmarkTG = result.GenerationTs;
+                item.LlamaVersion = result.LlamaVersion;
             }
 
             _items.Add(item);
@@ -467,6 +468,7 @@ public class ManageModelsWindow : Window
         AppendProgress($"Cache: {_modelsDir}");
         AppendProgress($"Version: {Path.GetFileName(_llamaVersionDir)}");
         AppendProgress("");
+        AppendProgress(_loc["manage.download_cmd_open"]);
 
         var startInfo = new ProcessStartInfo
         {
@@ -474,38 +476,20 @@ public class ManageModelsWindow : Window
             Arguments = $"-hf {hfRef}",
             WorkingDirectory = _llamaVersionDir,
             UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
+            CreateNoWindow = false
         };
         startInfo.EnvironmentVariables["HF_HUB_CACHE"] = _modelsDir;
 
         try
         {
-            var process = new Process { StartInfo = startInfo };
-
-            process.OutputDataReceived += (_, args) =>
+            var process = Process.Start(startInfo);
+            if (process != null)
             {
-                if (args.Data != null)
-                    Dispatcher.Invoke(() => AppendProgress(args.Data));
-            };
-
-            process.ErrorDataReceived += (_, args) =>
-            {
-                if (args.Data != null)
-                    Dispatcher.Invoke(() => AppendProgress(_loc.Format("vm.log.error_prefix", args.Data)));
-            };
-
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-
-            await System.Threading.Tasks.Task.Run(() => process.WaitForExit());
-
-            AppendProgress("");
-            AppendProgress(_loc["manage.download_done"]);
-
-            LoadModels();
+                await System.Threading.Tasks.Task.Run(() => process.WaitForExit());
+                AppendProgress("");
+                AppendProgress(_loc["manage.download_done"]);
+                LoadModels();
+            }
         }
         catch (Exception ex)
         {
@@ -536,12 +520,14 @@ public class ManageModelItem
     public ulong ContextLength { get; set; }
     public double BenchmarkPP { get; set; }
     public double BenchmarkTG { get; set; }
+    public string LlamaVersion { get; set; } = string.Empty;
 
     public string FileSizeDisplay => FileSize > 0 ? FormatSize(FileSize) : "-";
     public string ParameterCountDisplay => ParameterCount > 0 ? FormatParams(ParameterCount) : "-";
     public string ContextLengthDisplay => ContextLength > 0 ? ContextLength.ToString("N0") : "-";
     public string BenchmarkPPDisplay => BenchmarkPP > 0 ? BenchmarkPP.ToString("F1") : "-";
     public string BenchmarkTGDisplay => BenchmarkTG > 0 ? BenchmarkTG.ToString("F1") : "-";
+    public string LlamaVersionDisplay => string.IsNullOrEmpty(LlamaVersion) ? "-" : LlamaVersion;
 
     private static string FormatSize(long bytes)
     {

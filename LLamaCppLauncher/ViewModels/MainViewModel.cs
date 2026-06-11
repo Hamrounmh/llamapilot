@@ -105,6 +105,24 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _logCountDisplay = string.Empty;
 
+    [ObservableProperty]
+    private string _benchmarkNgl = "999";
+
+    [ObservableProperty]
+    private string _benchmarkCacheTypeK = "f16";
+
+    [ObservableProperty]
+    private string _benchmarkCacheTypeV = "f16";
+
+    [ObservableProperty]
+    private string _benchmarkPromptTokens = "512";
+
+    [ObservableProperty]
+    private string _benchmarkGenerationTokens = "128";
+
+    [ObservableProperty]
+    private string _benchmarkRepetitions = "3";
+
     public string LanguageLabel => _loc.LanguageLabel;
 
     public MainViewModel()
@@ -118,6 +136,7 @@ public partial class MainViewModel : ObservableObject
 
         InitializeParameters();
         LoadConfiguration();
+        LoadDefaultProfile();
         RefreshProfiles();
         UpdateStatusText();
         UpdateStatusBarVersion();
@@ -204,6 +223,29 @@ public partial class MainViewModel : ObservableObject
             RefreshModels();
             if (!string.IsNullOrEmpty(config.LastSelectedModel))
                 SelectedModel = Models.FirstOrDefault(m => m.FullPath == config.LastSelectedModel);
+        }
+    }
+
+    private void LoadDefaultProfile()
+    {
+        var defaultProfile = new LaunchProfile
+        {
+            Name = "default",
+            Parameters = new Dictionary<string, string>
+            {
+                { "-ngl", "999" },
+                { "--ctx-size", "65000" }
+            }
+        };
+
+        _profileService.SaveProfile("default", defaultProfile);
+
+        foreach (var param in Parameters)
+        {
+            if (defaultProfile.Parameters.TryGetValue(param.Name, out var value))
+                param.Value = value;
+            else
+                param.Value = string.Empty;
         }
     }
 
@@ -568,6 +610,8 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        UpdateBenchmarkConfig();
+
         var versions = _modelDiscoveryService.GetLlamaVersions(LlamaCppDirectory);
         var models = _modelDiscoveryService.GetModels(ModelsDirectory);
 
@@ -667,6 +711,22 @@ public partial class MainViewModel : ObservableObject
         BenchmarkStatus = string.Empty;
         BenchmarkAllCommand.NotifyCanExecuteChanged();
         BenchmarkMissingCommand.NotifyCanExecuteChanged();
+    }
+
+    private void UpdateBenchmarkConfig()
+    {
+        if (int.TryParse(BenchmarkNgl, out var ngl))
+            BenchmarkConfig.Ngl = ngl;
+        if (!string.IsNullOrWhiteSpace(BenchmarkCacheTypeK))
+            BenchmarkConfig.CacheTypeK = BenchmarkCacheTypeK;
+        if (!string.IsNullOrWhiteSpace(BenchmarkCacheTypeV))
+            BenchmarkConfig.CacheTypeV = BenchmarkCacheTypeV;
+        if (int.TryParse(BenchmarkPromptTokens, out var pt))
+            BenchmarkConfig.PromptTokens = pt;
+        if (int.TryParse(BenchmarkGenerationTokens, out var gt))
+            BenchmarkConfig.GenerationTokens = gt;
+        if (int.TryParse(BenchmarkRepetitions, out var rep))
+            BenchmarkConfig.Repetitions = rep;
     }
 }
 

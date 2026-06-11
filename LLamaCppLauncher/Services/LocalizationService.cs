@@ -157,7 +157,7 @@ public class LocalizationService : INotifyPropertyChanged
         ["manage.close"] = new() { ["en"] = "✕ Close", ["fr"] = "✕ Fermer" },
         ["manage.col_name"] = new() { ["en"] = "Name", ["fr"] = "Nom" },
         ["manage.col_size"] = new() { ["en"] = "Size", ["fr"] = "Taille" },
-        ["manage.col_params"] = new() { ["en"] = "Parameters", ["fr"] = "Paramètres" },
+        ["manage.col_version"] = new() { ["en"] = "llama.cpp", ["fr"] = "llama.cpp" },
         ["manage.col_context"] = new() { ["en"] = "Context", ["fr"] = "Contexte" },
         ["manage.refresh"] = new() { ["en"] = "🔄 Refresh", ["fr"] = "🔄 Actualiser" },
         ["manage.delete"] = new() { ["en"] = "🗑 Delete", ["fr"] = "🗑 Supprimer" },
@@ -172,6 +172,7 @@ public class LocalizationService : INotifyPropertyChanged
         ["manage.server_not_found"] = new() { ["en"] = "llama-server.exe not found in {0}", ["fr"] = "llama-server.exe introuvable dans {0}" },
         ["manage.downloading"] = new() { ["en"] = "Downloading {0}...", ["fr"] = "Téléchargement de {0}..." },
         ["manage.download_done"] = new() { ["en"] = "Download complete.", ["fr"] = "Téléchargement terminé." },
+        ["manage.download_cmd_open"] = new() { ["en"] = "Opening download window...", ["fr"] = "Ouverture de la fenêtre de téléchargement..." },
 
         // LlamaProcessService
         ["svc.process_already_running"] = new() { ["en"] = "A process is already running.", ["fr"] = "Un processus est déjà en cours d'exécution." },

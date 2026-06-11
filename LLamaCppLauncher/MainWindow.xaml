@@ -444,6 +444,57 @@
                             <Run Text="{loc:Loc benchmark.title}"/>
                         </TextBlock>
 
+                        <UniformGrid Columns="2" Margin="0,0,0,4">
+                            <Grid Margin="0,0,4,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="70"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label Grid.Column="0" Content="NGL" VerticalContentAlignment="Center" Padding="0" FontSize="10"/>
+                                <TextBox Grid.Column="1" Text="{Binding BenchmarkNgl, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center" FontSize="10" Padding="4,2"/>
+                            </Grid>
+                            <Grid Margin="0,0,4,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="70"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label Grid.Column="0" Content="Cache K" VerticalContentAlignment="Center" Padding="0" FontSize="10"/>
+                                <TextBox Grid.Column="1" Text="{Binding BenchmarkCacheTypeK, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center" FontSize="10" Padding="4,2"/>
+                            </Grid>
+                            <Grid Margin="0,0,4,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="70"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label Grid.Column="0" Content="Cache V" VerticalContentAlignment="Center" Padding="0" FontSize="10"/>
+                                <TextBox Grid.Column="1" Text="{Binding BenchmarkCacheTypeV, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center" FontSize="10" Padding="4,2"/>
+                            </Grid>
+                            <Grid Margin="0,0,4,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="70"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label Grid.Column="0" Content="Prompt" VerticalContentAlignment="Center" Padding="0" FontSize="10"/>
+                                <TextBox Grid.Column="1" Text="{Binding BenchmarkPromptTokens, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center" FontSize="10" Padding="4,2"/>
+                            </Grid>
+                            <Grid Margin="0,0,4,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="70"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label Grid.Column="0" Content="Generation" VerticalContentAlignment="Center" Padding="0" FontSize="10"/>
+                                <TextBox Grid.Column="1" Text="{Binding BenchmarkGenerationTokens, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center" FontSize="10" Padding="4,2"/>
+                            </Grid>
+                            <Grid Margin="0,0,4,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="70"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label Grid.Column="0" Content="Repetitions" VerticalContentAlignment="Center" Padding="0" FontSize="10"/>
+                                <TextBox Grid.Column="1" Text="{Binding BenchmarkRepetitions, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center" FontSize="10" Padding="4,2"/>
+                            </Grid>
+                        </UniformGrid>
+
                         <Button Content="Benchmark All" 
                                 Command="{Binding BenchmarkAllCommand}"
                                 Style="{StaticResource SmallButton}" 

@@ -2,10 +2,10 @@ namespace LLamaCppLauncher.Models;
 
 public static class BenchmarkConfig
 {
-    public const int Ngl = 999;
-    public const string CacheTypeK = "f16";
-    public const string CacheTypeV = "f16";
-    public const int PromptTokens = 512;
-    public const int GenerationTokens = 128;
-    public const int Repetitions = 3;
+    public static int Ngl { get; set; } = 999;
+    public static string CacheTypeK { get; set; } = "f16";
+    public static string CacheTypeV { get; set; } = "f16";
+    public static int PromptTokens { get; set; } = 512;
+    public static int GenerationTokens { get; set; } = 128;
+    public static int Repetitions { get; set; } = 3;
 }
