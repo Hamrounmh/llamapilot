@@ -576,6 +576,17 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+
+                            <Border Height="1" Background="#3F3F46" Margin="0,4,0,4" Opacity="0.6"/>
+                            <Label Content="{loc:Loc params.custom}" Margin="0,0,0,1"/>
+                            <TextBox Text="{Binding CustomParameters, UpdateSourceTrigger=PropertyChanged}"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto"
+                                     MinHeight="60" MaxHeight="120"
+                                     FontFamily="Cascadia Code, Consolas"
+                                     FontSize="10"
+                                     Padding="6,4"/>
                         </StackPanel>
                     </ScrollViewer>
 
@@ -697,6 +708,10 @@
                         </Ellipse.Style>
                     </Ellipse>
                     <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="#B0B0B0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding PromptProcessingSpeed}" FontSize="11" Foreground="#569CD6" VerticalAlignment="Center" Margin="12,0,0,0"
+                               ToolTip="{loc:Loc status.pp_speed_tooltip}"/>
+                    <TextBlock Text="{Binding TokensPerSecond}" FontSize="11" Foreground="#4EC9B0" VerticalAlignment="Center" Margin="12,0,0,0"
+                               ToolTip="{loc:Loc status.tg_speed_tooltip}"/>
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">

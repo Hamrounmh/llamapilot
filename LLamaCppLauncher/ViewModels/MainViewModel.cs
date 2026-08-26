@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -50,6 +51,9 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private ObservableCollection<LlamaParameter> _parameters = new();
+
+    [ObservableProperty]
+    private string _customParameters = string.Empty;
 
     [ObservableProperty]
     private string _host = "127.0.0.1";
@@ -104,6 +108,45 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private string _logCountDisplay = string.Empty;
+
+    [ObservableProperty]
+    private string _tokensPerSecond = string.Empty;
+
+    [ObservableProperty]
+    private string _promptProcessingSpeed = string.Empty;
+
+    // Final (end of request) speeds — printed by llama.cpp as e.g.
+    // "prompt eval time = 1234.56 ms / 1000 tokens (1.23 ms per token, 812.34 tokens per second)"
+    // The tokens/sec value is the SECOND number inside the parentheses.
+    // Final TG (decode): "eval time" but NOT "prompt eval time"
+    private static readonly Regex FinalTgRegex = new(
+        @"(?<!prompt\s)eval\s+time\s*=.*?ms\s+per\s+token,\s*([\d.]+)\s*tokens\s+per\s+second",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // Final PP (prompt processing): "prompt eval time"
+    private static readonly Regex FinalPpRegex = new(
+        @"prompt\s+eval\s+time\s*=.*?ms\s+per\s+token,\s*([\d.]+)\s*tokens\s+per\s+second",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // Live TG during generation: "n_gen =  123, tg =  45.20 t/s, tg_3s =  43.80 t/s"
+    // tg_3s is a 3-second sliding window — more stable than the cumulative tg
+    private static readonly Regex LiveTgRegex = new(
+        @"n_gen\s*=\s*\d+,\s*tg\s*=\s*[\d.]+\s*t/s,\s*tg_3s\s*=\s*([\d.]+)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    // Live PP during long prompt processing:
+    // "prompt processing, n_tokens =  500, progress = 0.50, t =  3.12 s / 812.34 tokens per second"
+    private static readonly Regex LivePpRegex = new(
+        @"prompt\s+processing.*?/\s*([\d.]+)\s*tokens\s+per\s+second",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private readonly Queue<double> _tgAverages = new();   // per-request final TG speeds
+    private readonly Queue<double> _ppAverages = new();   // per-request final PP speeds
+    private const int MaxSpeedSamples = 10;
+    private double? _tgLive;    // last live tg_3s value
+    private double? _ppLive;    // last live prompt processing speed
+    private DateTime _lastSpeedUpdate;
+    private System.Windows.Threading.DispatcherTimer? _speedTimer;
+    // Incremented on every Start(): identifies the current server session so a
+    // late Exited event from a killed previous process can be ignored.
+    private int _serverSession;
 
     [ObservableProperty]
     private string _benchmarkNgl = "999";
@@ -249,6 +292,8 @@ public partial class MainViewModel : ObservableObject
             else
                 param.Value = string.Empty;
         }
+
+        CustomParameters = string.Empty;
     }
 
     private void SaveConfiguration()
@@ -367,6 +412,9 @@ public partial class MainViewModel : ObservableObject
                     .ToDictionary(p => p.Name, p => p.Value)
             };
 
+            if (!string.IsNullOrWhiteSpace(CustomParameters))
+                profile.Parameters["__custom__"] = CustomParameters;
+
             _profileService.SaveProfile(profile.Name, profile);
             RefreshProfiles();
             AddLog(_loc.Format("vm.log.profile_saved", profile.Name));
@@ -397,6 +445,8 @@ public partial class MainViewModel : ObservableObject
                 param.Value = string.Empty;
         }
 
+        CustomParameters = profile.Parameters.TryGetValue("__custom__", out var custom) ? custom : string.Empty;
+
         AddLog(_loc.Format("vm.log.profile_loaded", SelectedProfile));
     }
 
@@ -415,6 +465,23 @@ public partial class MainViewModel : ObservableObject
                 else
                     param.Value = string.Empty;
             }
+
+            var knownNames = new HashSet<string>(
+                Parameters.Select(p => p.Name),
+                StringComparer.OrdinalIgnoreCase);
+
+            var customParts = new List<string>();
+            foreach (var kvp in parsed)
+            {
+                if (!knownNames.Contains(kvp.Key))
+                {
+                    if (kvp.Value == "on")
+                        customParts.Add(kvp.Key);
+                    else
+                        customParts.Add($"{kvp.Key} {kvp.Value}");
+                }
+            }
+            CustomParameters = string.Join(" ", customParts);
 
             AddLog(_loc["vm.log.command_imported"]);
         }
@@ -447,6 +514,10 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        // Each new server session starts with a clean footer: reset PP/TG stats
+        var session = ++_serverSession;
+        ResetSpeedTracking();
+
         IsRunning = true;
         UpdateStatusText();
         StartCommand.NotifyCanExecuteChanged();
@@ -466,16 +537,26 @@ public partial class MainViewModel : ObservableObject
                 Port,
                 parameters,
                 line => WpfApplication.Current.Dispatcher.Invoke(() => AddLog(line)),
-                line => WpfApplication.Current.Dispatcher.Invoke(() => AddLog(_loc.Format("vm.log.error_prefix", line))),
+                line => WpfApplication.Current.Dispatcher.Invoke(() =>
+                {
+                    AddLog(_loc.Format("vm.log.error_prefix", line));
+                    ParseSpeedLine(line);
+                }),
                 () => WpfApplication.Current.Dispatcher.Invoke(() =>
                 {
+                    // Ignore a stale exit from a previously killed/restarted server
+                    if (session != _serverSession)
+                        return;
+
+                    ResetSpeedTracking();
                     IsRunning = false;
                     UpdateStatusText();
                     StartCommand.NotifyCanExecuteChanged();
                     StopCommand.NotifyCanExecuteChanged();
                     RestartCommand.NotifyCanExecuteChanged();
                     AddLog(_loc["vm.log.server_stopped"]);
-                })
+                }),
+                CustomParameters
             );
         }
         catch (Exception ex)
@@ -495,6 +576,7 @@ public partial class MainViewModel : ObservableObject
     private void Stop()
     {
         _llamaProcessService.Stop();
+        ResetSpeedTracking();
         AddLog(_loc["vm.log.stop_requested"]);
     }
 
@@ -504,6 +586,7 @@ public partial class MainViewModel : ObservableObject
     private async Task Restart()
     {
         Stop();
+        // Wait for the old process to fully release the port before restarting
         await Task.Delay(1000);
         await Start();
     }
@@ -529,6 +612,126 @@ public partial class MainViewModel : ObservableObject
 
         while (Logs.Count > 1000)
             Logs.RemoveAt(0);
+    }
+
+    private void ParseSpeedLine(string line)
+    {
+        var matched = false;
+
+        // Final TG (decode) speed, printed at the end of each request
+        var tgMatch = FinalTgRegex.Match(line);
+        if (tgMatch.Success && double.TryParse(tgMatch.Groups[1].Value,
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var tgSpeed))
+        {
+            _tgAverages.Enqueue(tgSpeed);
+            while (_tgAverages.Count > MaxSpeedSamples)
+                _tgAverages.Dequeue();
+            _tgLive = tgSpeed;
+            matched = true;
+        }
+
+        // Final PP (prompt processing) speed, printed at the end of each request
+        var ppMatch = FinalPpRegex.Match(line);
+        if (ppMatch.Success && double.TryParse(ppMatch.Groups[1].Value,
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var ppSpeed))
+        {
+            _ppAverages.Enqueue(ppSpeed);
+            while (_ppAverages.Count > MaxSpeedSamples)
+                _ppAverages.Dequeue();
+            _ppLive = ppSpeed;
+            matched = true;
+        }
+
+        // Live TG during generation (tg_3s = 3-second sliding window)
+        var liveTgMatch = LiveTgRegex.Match(line);
+        if (liveTgMatch.Success && double.TryParse(liveTgMatch.Groups[1].Value,
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var tgLive))
+        {
+            _tgLive = tgLive;
+            matched = true;
+        }
+
+        // Live PP during long prompt processing
+        var livePpMatch = LivePpRegex.Match(line);
+        if (livePpMatch.Success && double.TryParse(livePpMatch.Groups[1].Value,
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var ppLive))
+        {
+            _ppLive = ppLive;
+            matched = true;
+        }
+
+        if (matched)
+        {
+            _lastSpeedUpdate = DateTime.Now;
+            EnsureSpeedTimer();
+            UpdateSpeedDisplays();
+        }
+    }
+
+    private void EnsureSpeedTimer()
+    {
+        if (_speedTimer == null)
+        {
+            _speedTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(5)
+            };
+            _speedTimer.Tick += (_, _) =>
+            {
+                // Expire live speeds once generation has stopped updating them
+                if ((_tgLive != null || _ppLive != null) &&
+                    (DateTime.Now - _lastSpeedUpdate).TotalSeconds > 5)
+                {
+                    _tgLive = null;
+                    _ppLive = null;
+                    UpdateSpeedDisplays();
+                }
+            };
+        }
+        _speedTimer.Start();
+    }
+
+    private void UpdateSpeedDisplays()
+    {
+        // PP: live speed while processing, otherwise the rolling average
+        if (_ppLive.HasValue || _ppAverages.Count > 0)
+        {
+            var pp = _ppLive ?? _ppAverages.Average();
+            PromptProcessingSpeed = $"PP: {pp:F1} t/s";
+        }
+        else
+        {
+            PromptProcessingSpeed = string.Empty;
+        }
+
+        // TG: live speed with the rolling average alongside when available
+        if (_tgLive.HasValue && _tgAverages.Count > 0)
+            TokensPerSecond = $"TG: {_tgLive:F1} t/s (avg {_tgAverages.Average():F1})";
+        else if (_tgLive.HasValue)
+            TokensPerSecond = $"TG: {_tgLive:F1} t/s";
+        else if (_tgAverages.Count > 0)
+            TokensPerSecond = $"TG: {_tgAverages.Average():F1} t/s";
+        else
+            TokensPerSecond = string.Empty;
+    }
+
+    private void ResetSpeedTracking()
+    {
+        _tgAverages.Clear();
+        _ppAverages.Clear();
+        _tgLive = null;
+        _ppLive = null;
+        _speedTimer?.Stop();
+        TokensPerSecond = string.Empty;
+        PromptProcessingSpeed = string.Empty;
     }
 
     partial void OnSelectedVersionChanged(string? value)

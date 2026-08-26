@@ -23,7 +23,8 @@ public class LlamaProcessService
         Dictionary<string, string> parameters,
         Action<string> onOutput,
         Action<string> onError,
-        Action onExit)
+        Action onExit,
+        string? customArgs = null)
     {
         if (IsRunning)
             throw new InvalidOperationException(_loc["svc.process_already_running"]);
@@ -34,7 +35,7 @@ public class LlamaProcessService
         if (!File.Exists(exePath))
             throw new FileNotFoundException(_loc.Format("svc.server_not_found", llamaDir));
 
-        var args = BuildArguments(modelPath, host, port, parameters);
+        var args = BuildArguments(modelPath, host, port, parameters, customArgs);
 
         var startInfo = new ProcessStartInfo
         {
@@ -106,7 +107,7 @@ public class LlamaProcessService
         }
     }
 
-    private static string BuildArguments(string modelPath, string host, string port, Dictionary<string, string> parameters)
+    private static string BuildArguments(string modelPath, string host, string port, Dictionary<string, string> parameters, string? customArgs = null)
     {
         var flagParams = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "--jinja" };
 
@@ -135,6 +136,9 @@ public class LlamaProcessService
                     parts.Add($"{param.Key} {param.Value}");
             }
         }
+
+        if (!string.IsNullOrWhiteSpace(customArgs))
+            parts.Add(customArgs.Trim());
 
         return string.Join(" ", parts);
     }

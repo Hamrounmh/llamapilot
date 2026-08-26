@@ -84,6 +84,7 @@ public class LocalizationService : INotifyPropertyChanged
 
         // Launch parameters section
         ["params.title"] = new() { ["en"] = " Launch parameters", ["fr"] = " Paramètres de lancement" },
+        ["params.custom"] = new() { ["en"] = "Custom parameters", ["fr"] = "Paramètres personnalisés" },
 
         // Profiles section
         ["profiles.title"] = new() { ["en"] = " Profiles", ["fr"] = " Profils" },
@@ -113,6 +114,8 @@ public class LocalizationService : INotifyPropertyChanged
         ["status.version_none"] = new() { ["en"] = "Version: -", ["fr"] = "Version : -" },
         ["status.model_format"] = new() { ["en"] = "Model: {0}", ["fr"] = "Modèle : {0}" },
         ["status.model_none"] = new() { ["en"] = "Model: -", ["fr"] = "Modèle : -" },
+        ["status.pp_speed_tooltip"] = new() { ["en"] = "Prompt processing speed (live / average of last 10 requests)", ["fr"] = "Vitesse de traitement du prompt (instantanée / moyenne des 10 dernières requêtes)" },
+        ["status.tg_speed_tooltip"] = new() { ["en"] = "Token generation speed (live / average of last 10 requests)", ["fr"] = "Vitesse de génération (instantanée / moyenne des 10 dernières requêtes)" },
 
         // ViewModel - dialogs
         ["vm.select_llama_dir"] = new() { ["en"] = "Select llama.cpp directory", ["fr"] = "Sélectionner le répertoire llama.cpp" },
